@@ -1,4 +1,3 @@
-# from pathlib import Path
 from assets import *
 import requests
 
@@ -46,7 +45,7 @@ def main():
             # Pad both lists to the same length
             max_lines = max(len(ascii_art), len(data_lines))
             ascii_art_padded = ascii_art + [""] * (max_lines - len(ascii_art))
-            data_lines_padded = data_lines + [""] * (max_lines - len(data_lines))s
+            data_lines_padded = data_lines + [""] * (max_lines - len(data_lines))
 
             for left, right in zip(ascii_art_padded, data_lines_padded):
                 print(f"{left:<15}  {right}")
