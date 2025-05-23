@@ -10,6 +10,9 @@ venv/
 
 # Project
 todo.txt
+daily_sales_data.xlsx
+db/
+excel/
 
 # Specific to VS Code (optional, but good practice)
 .vscode/
