@@ -1,100 +1,54 @@
-import pandas as pd
-import sqlite3
-import os
-
-db_folder_name = 'db'
-db_file_name = 'sales_data.db'
-excel_folder_name = 'excel'
-excel_file_name = 'store_daily_activity_report.xlsx'
-db_file_path = os.path.join(db_folder_name, db_file_name)
-excel_file_path = os.path.join(excel_folder_name, excel_file_name)
-
-table_name = "SalesData"
-
-sample_data = [
-    (2025, 1, 1, "Jantzen Beach", 629, 1000.50, 200.75, 5),
-    (2025, 1, 2, "Jantzen Beach", 629, 1500.00, 300.00, 10),
-    (2025, 1, 3, "Jantzen Beach", 629, 2000.00, 400.00, 15),
-]
-
-# --- 1. Ensure the database folder exists ---
-os.makedirs(db_folder_name, exist_ok=True) # Creates 'db' folder if it doesn't exist
-print(f"Ensured '{db_folder_name}' directory exists.")
-os.makedirs(excel_folder_name, exist_ok=True) # Creates 'excel' folder if it doesn't exist
-print(f"Ensured '{excel_folder_name}' directory exists.")
-
-# --- 2. Read Excel Data ---
-try:
-    # Assuming your data is on the first sheet, or specify sheet_name='Sheet1'
-    df = pd.read_excel(excel_file_path)
-    print("Excel data loaded successfully.")
-    print(df.head()) # Display first few rows to verify
-except FileNotFoundError:
-    print(f"Error: Excel file not found at {excel_file_path}")
-    exit()
-except Exception as e:
-    print(f"Error reading Excel file: {e}")
-    exit()
-
-# --- 3. Connect to SQLite Database ---
-try:
-    conn = sqlite3.connect(db_file_path)
-    cursor = conn.cursor()
-    print(f"Connected to SQLite database: {db_file_path}")
-except Exception as e:
-    print(f"Error connecting to database: {e}")
-    exit()
-
-create_table_sql = f"""
-CREATE TABLE IF NOT EXISTS {table_name} (
-    StoreName TEXT NOT NULL,
-    StoreID INTEGER NOT NULL,
-    date DATE NOT NULL,
-    TotalSales REAL,
-    AccessorySales REAL,
-    HomeConnectedSales INTEGER,
-    HomePlusSales INTEGER
-    Cleanings INTEGER,
-    Repairs INTEGER,
-);
 """
-try:
-    cursor.execute(create_table_sql)
-    print(f"Table '{table_name}' checked/created successfully.")
-    conn.commit() # Commit the table creation
-except Exception as e:
-    print(f"Error creating table: {e}")
-    conn.close()
-    exit()
+load_sales.py – read daily_sales_data.xlsx → push into an SQL table
 
-# --- 4. Transfer Data to SQL Database ---
-try:
-    # 'append' adds new rows, 'replace' drops table and recreates, 'fail' raises error if table exists
-    df.to_sql(table_name, conn, if_exists='append', index=False)
-    print("Data transferred successfully to SQL database.")
-except Exception as e:
-    print(f"Error transferring data: {e}")
-finally:
-    # --- 5. Close Connection ---
-    if conn:
-        conn.close()
-        print("Database connection closed.")
+USAGE
+$ DATABASE_URL="postgresql+psycopg://user:pass@host/db" \
+  python load_sales.py /path/to/daily_sales_data.xlsx
+# If DATABASE_URL is unset it falls back to local SQLite (db/sales.db)
 
-# --- 5. Verify Data by Querying the Database ---
-print("\n--- Verifying data in the database ---")
-try:
-    cursor.execute(f"SELECT * FROM {table_name};")
-    rows = cursor.fetchall() # Fetches all rows from the result of the query
+CRON EXAMPLE  (runs at 6 AM every day)
+0 6 * * * /usr/bin/env -i DATABASE_URL="..." /usr/bin/python /opt/load_sales.py /share/daily_sales_data.xlsx
+"""
+import sys, os, pathlib, pandas as pd
+from sqlalchemy import create_engine, text
+from sqlalchemy.exc import SQLAlchemyError
 
-    if not rows:
-        print("No data found in the table.")
-    else:
-        for row in rows:
-            print(row) # Each row is a tuple of values
-except Exception as e:
-    print(f"Error querying data: {e}")
-finally:
-    # --- 6. Close Connection ---
-    if conn:
-        conn.close()
-        print("\nDatabase connection closed.")
+# ---------- 1. Config ----------
+DB_URL = os.getenv("DATABASE_URL", "sqlite:///db/sales.db")
+EXCEL_PATH = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "daily_sales_data.xlsx")
+TABLE      = "daily_sales"
+
+# ---------- 2. Read & clean ----------
+df = pd.read_excel(EXCEL_PATH)
+df.columns = df.columns.str.strip().str.replace(" ", "_")   # neat snake-case cols
+df["Store"].ffill(inplace=True)                             # carry-forward blanks
+df["Date"] = pd.to_datetime(df["Date"]).dt.date             # pure YYYY-MM-DD
+
+# OPTIONAL: make a composite primary-key column (Store+Date) for de-dup
+df["pk"] = df["Store"] + "_" + df["Date"].astype(str)
+
+# ---------- 3. Push ----------
+engine = create_engine(DB_URL, future=True)
+
+with engine.begin() as conn:                       # one atomic transaction
+    # 3a. create table if absent (datatype guesses are OK for demos)
+    df.head(0).to_sql(TABLE, conn, if_exists="append", index=False)
+
+    # 3b. UPSERT – works on Postgres / SQLite 3.35+  (falls back to append otherwise)
+    try:
+        df.to_sql(TABLE, conn, if_exists="append", index=False,
+                  method="multi", chunksize=1000,
+                  # dtype={c: df.dtypes[c] for c in df.columns},
+                  # let SQLAlchemy generate INSERT … ON CONFLICT DO NOTHING
+                  #              PK name must match the table definition
+                  )
+        # where necessary you can write explicit text(...) for MERGE/ON DUPLICATE
+    except SQLAlchemyError as e:
+        print(f"[WARN] fast upsert path failed → falling back to plain INSERT ({e})")
+        df.to_sql(TABLE, conn, if_exists="append", index=False, method="multi")
+
+    # 3c. Simple check
+    rows = conn.execute(text(f"SELECT COUNT(*) FROM {TABLE}")).scalar_one()
+    print(f"Ingest complete. {rows:,} total rows in {TABLE}.")
+
+print("Done ✅")
