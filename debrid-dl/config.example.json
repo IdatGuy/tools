@@ -1,0 +1,12 @@
+{
+  "jackett_url": "http://localhost:9117",
+  "jackett_api_key": "YOUR_JACKETT_API_KEY",
+  "realdebrid_api_token": "YOUR_REALDEBRID_TOKEN",
+  "download_dirs": {
+    "movies": "/mnt/media/movies",
+    "tv": "/mnt/media/tv",
+    "anime": "/mnt/media/anime"
+  },
+  "default_limit": 5,
+  "max_concurrent_downloads": 3
+}

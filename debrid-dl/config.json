@@ -1,0 +1,11 @@
+{
+  "jackett_url": "http://172.22.0.2:9117",
+  "jackett_api_key": "kpjtvxyqurpo95sdlbpzt9bm5fstsmtb",
+  "realdebrid_api_token": "2FB2PMKNXRGYL7LH72BLEYJQ5A76CHXBYSA5ET264WTXB6FP446A",
+  "download_dirs": {                                                                               
+    "movies": "/mnt/media/movies",                                                                 
+    "tv": "/mnt/media/tv",                                                                         
+    "anime": "/mnt/media/anime"                                                                    
+  },
+  "default_limit": 25
+}
