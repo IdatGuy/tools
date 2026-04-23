@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+
+# Project
+todo.txt
+
+# Specific to VS Code (optional, but good practice)
+.vscode/
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+
