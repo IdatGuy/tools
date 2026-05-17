@@ -625,7 +625,14 @@ def main():
 
             # 3. Add magnet to Real-Debrid and wait for metadata
             print("⏳ Sending to Real-Debrid...")
-            torrent_id = rd.add_magnet(selected["magnet"])
+            try:
+                torrent_id = rd.add_magnet(selected["magnet"])
+            except requests.exceptions.HTTPError as e:
+                if e.response is not None and e.response.status_code == 451:
+                    print("✗ Real-Debrid refused this torrent (451 — unavailable for legal reasons). Try a different release.")
+                else:
+                    print(f"✗ Real-Debrid error: {e}")
+                continue
             info = rd.wait_for_metadata(torrent_id)
             files = info.get("files", [])
 
